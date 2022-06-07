@@ -1,0 +1,289 @@
+---
+title: "Hausarbeit"
+output: html_document
+date: '2022-05-30'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+1) Zunächst wird ein Summary des Datensatz erstellt. Anhand dessen werden leere Werte bzw. Unstimmigkeiten beobachtet. 
+
+```{r}
+
+titanicRoh <- read.csv(file.choose("/User/milena/Statistik/titanic.csv"))
+titanic <- titanicRoh
+summary<-as.data.frame(summary(titanic)) 
+summary
+
+summary(titanic$Age) 
+#vor Data Cleaning Median = 28, Mean 29.70
+```
+
+
+2) Behandlung von fehlenden Werten:
+- fuer Variable "Age": Merkmalstraeger mit NA-Werte werden ausgeschlossen mit der Ausnahme der Merkmalstraeger mit dem Titel "Master" im Namen.
+Der Titel "Master" designierte frueher einen maennlichen Jugendlichen unter 18. 
+Fuer die Merkmalstraeger mit dem Titel Master wird der Mittelwert der maennlichen Jugendlichen von 0 bis 17 verwendet, um NA-Werte zu schaetzen. 
+Siehe https://writingexplained.org/master-vs-mister-difference#:~:text=What%20does%20master%20mean%3F,antiquated%20and%20appears%20only%20rarely.
+- fuer Variable "Preis" 0.00-Werte werden mit Median der jeweiligen Buchungsklasse (Pclass) ersetzt 
+- fuer Variable "Name": Maedchennamen werden entfernt
+- fuer Variable "Ticket": nicht-numerische Symbole werden entfernt, um eine einheitliche Formatierung als ID zu erlangen
+- fuer Variable "Embarked": leere Eintraege werden entfernt
+
+
+```{r pressure, echo=FALSE}
+
+#Age
+#allWithoutMaster <- titanic$Age[grepl("Master", titanic$Name, fixed=TRUE) == FALSE ]
+#allWithoutMasterMean <- round(mean(allWithoutMaster, na.rm=TRUE), digits=2)
+#allWithoutMasterMean
+#meanAge <- round(mean(titanic$Age, na.rm=TRUE), digits=2)
+#meanAge - Unterschied 1 Jahr zwischen den Means
+masterMales <- titanic$Age[titanic$Sex == 'male' & titanic$Age<17]
+masterMean <- round(mean(masterMales , na.rm=TRUE),2)
+masterMean
+titanic$Age[is.na(titanic$Age) == TRUE & grepl("Master", titanic$Name, fixed=TRUE) == TRUE] <- masterMean
+
+
+titanic <- na.omit(titanic)
+
+titanic <-titanic[titanic$Embarked != "",]
+
+#Preis
+klasseEins <- titanic[titanic$Pclass == 1,]
+medianKlasseEins <- median(klasseEins$Fare)
+#medianKlasseEins
+titanic$Fare[titanic$Fare == 0.00 & titanic$Pclass ==1] <- medianKlasseEins
+
+klasseZwei <- titanic[titanic$Pclass == 2,]
+medianKlasseZwei <- median(klasseZwei$Fare)
+#medianKlasseZwei
+titanic$Fare[titanic$Fare == 0.00 & titanic$Pclass == 2] <- medianKlasseZwei
+
+klasseDrei <- titanic[titanic$Pclass == 3,]
+medianKlasseDrei <- median(klasseDrei$Fare)
+#medianKlasseDrei
+titanic$Fare[titanic$Fare == 0.00 & titanic$Pclass == 3] <- medianKlasseDrei
+
+#keine duplicate
+unique(titanic)
+
+
+```
+```{r}
+#Name 
+library(stringr)
+library(dplyr)
+
+titanicNamen <- titanic$Name
+titanicNamen <- str_split_fixed(titanicNamen, " \\((.*?)\\)", 2)
+titanic$Name <- titanicNamen[,1]
+
+tickets <- titanic$Ticket
+
+titanic$Ticket <- gsub("[^0-9]", "", tickets)
+
+
+```
+
+3) Die kategorischen Variablen werden mittels table oder histogramme summarized
+  - Variable "Sex": Männer machen die Mehrheit (>60%) des Datensatzes aus
+  - Variable "Survived": im Datenset überwiegen die Verstorbenen (59.3%)
+  - Variable "PClass": 50% der Daten stammen von Fahrklasse 3
+  - Variable "Embarked": Southampton, Cherbourg, and Queenstown. 70% der Merkmalstraeger sind in Southhampton eingestiegen
+  - Variable "Parch": 72% reisten ohne Kinder oder Eltern
+  - Variable "SibSp": 65% der Passagiere reisen ohne Geschwister oder Ehepartner
+
+
+ 
+```{r cars}
+
+titanic$Sex
+sexTable <- table(titanic$Sex)
+sexTable
+barplot(sexTable/sum(sexTable))
+
+
+survivedTable <- table(titanic$Survived)
+survivedTable
+barplot(survivedTable/sum(survivedTable))
+
+
+classTable<- table(titanic$Pclass)
+barplot(classTable/sum(classTable))
+
+embarkedTable <- table(titanic$Embarked)
+barplot(embarkedTable/sum(embarkedTable))
+
+parentsTable<-table(titanic$Parch)
+barplot(parentsTable/sum(parentsTable))
+
+siblingsTable<-table(titanic$SibSp)
+barplot(siblingsTable/sum(siblingsTable))
+
+siblingsTable/sum(siblingsTable)
+
+
+```
+- Variable "Age": 
+      Range: das juengste Alter im Datensatz ist ~ 5 Monate alt und das Aelteste ist 80
+      Mean = 29.52 und Median = 28 (vor Cleaning war Mean 29.70)
+      Die Histogramme im unterschiedlichen Schrittgroessen zeigen eine leichte Rechtsverschiebung -> die Mehrheit der Merkmalstraeger > 30
+      Boxplot: im 1. und im 4. Quartil: breitere Altersspannen als im 2. und im 3.; Rechtsverschiebung ebenfalls sichtbar
+
+Variable "Age" wird in 10er Schritt in Klassen gruppiert und als Spalte dem Datensatz hinzugefuegt.
+30% der Passagiere waren zwischen 20 und 30 J. alt
+
+```{r}
+
+summary(titanic$Age)
+hist(titanic$Age, xlab="Alter", ylab="Haeufigkeit", breaks=seq(0,max(titanic$Age), 5))
+hist(titanic$Age, xlab="Alter", ylab="Haeufigkeit", breaks=seq(0,max(titanic$Age, na.rm=TRUE), 10))
+hist(titanic$Age, xlab="Alter", ylab="Haeufigkeit", breaks=seq(0,max(titanic$Age, na.rm=TRUE)+10, 15))
+
+boxplot(titanic$Age)
+
+
+```
+
+
+
+```{r}
+ages <- titanic$Age
+agesCtg <- rep(0,length(ages))
+
+for(i in 1: length(ages) ){
+   if(ages[i]>=0 & ages[i]< 10){
+     agesCtg[i] = "[0,10)"
+   }else if(ages[i]>=10 & ages[i]< 20){
+     agesCtg[i] = "[10,20)"
+   }else if(ages[i]>=20 & ages[i]< 30){
+     agesCtg[i] = "[20,30)"
+   }else if(ages[i]>=30 & ages[i]< 40){
+     agesCtg[i] = "[30,40)"
+   }else if(ages[i]>=40 & ages[i]< 50){
+     agesCtg[i] = "[40,50)"
+   }else if(ages[i]>=50 & ages[i]< 60){
+     agesCtg[i] = "[50,60)"
+   }else if(ages[i]>=60 & ages[i]< 70){
+     agesCtg[i] = "[60,70)"
+   }else{
+     agesCtg[i] = "[70, 80)"
+   }
+    
+}
+
+titanic <- cbind(titanic,agesCtg)
+
+```
+
+
+```{r}
+tableAge <- table(titanic$agesCtg)
+
+barplot(tableAge/sum(tableAge))
+```
+
+
+
+4) Multivariate Zusammenhaenge
+
+- Age Klassen x Survived: in 10er Schritt sind Assoziationen zwischen Altersklassen und Ueberlebenswahrscheinlichkeit zu vermuten.  
+Aussagen der Koeffizienten: Alle normierte Koeffizienten sind ~0.1, was auf einen schwachen Zusammenhang hindeutet. 
+Eine weitere Analyse mit verschiedenen Klassenbreiten koennte evtl ein anderes Bild ermoeglichen.
+//TODO
+
+
+```{r}
+library(vcd)
+library(DescTools)
+
+#contingency table age-klassen und survived 
+cTAges <- table(titanic$agesCtg, titanic$Survived)
+cTAgesRel<- cTAges/sum(cTAges)
+#addmargins(cTAges)
+
+mosaicplot(cTAges)
+
+chiSq <- chisq.test(cTAges)
+chiSq$expected
+assocstats(cTAges)
+
+Phi(cTAges)
+```
+
+- Sex x Survived: In der Gruppe der Frauen haben die meisten ueberlebt, waehrend in der Gruppe der Maenner die Mehrheit gestorben ist.
+Die Kontingenzkoeffizienten deuten auf einen starken Zusammenhang hin (~0.5).
+
+```{r}
+#contingency table age-klassen und survived 
+cTSexS <- table(titanic$Sex, titanic$Survived)
+cTSexSRel<- cTSexS/sum(cTSexS)
+ addmargins(cTSexSRel )
+
+mosaicplot(cTSexS)
+
+chiSq <- chisq.test(cTSexS)
+chiSq$expected
+assocstats(cTSexS)
+
+Phi(cTSexS)
+```
+
+
+Von Interesse: Sex x Survived x Age um die Ergebnisse der "Women and Children First"-Policy zu testen. [Extra Kategorie Sex x Age, wobei Age in breiteren Schritten angelegt ist]
+```{r}
+groupAge <- titanic$Age
+titanic <-cbind(titanic, groupAge)
+titanic$groupAge[titanic$Age < 18] <- "child"
+titanic$groupAge[titanic$Age < 60 & titanic$Age >= 18 ] <-"adult"
+titanic$groupAge[titanic$Age > 60] <- "oldies"
+
+policy<-table(titanic$Sex, titanic$Survived, titanic$groupAge)
+policy
+mosaicplot(policy)
+
+
+```
+
+
+ - PClass x Survived: In der 1. Klasse haben 2/3 ueberlebt. In der 2 Klasse 50-50, in der 3. Klasse fast 3/4 sind gestorben. 
+ //bedingte rel Haeufigkeit berechnen und unter versch. Bedingungen vergleichen um tiefere Aussagen treffen zu koennen
+ Koeffizienten sind ~ 0.3 und deuten einen Zusammenhang an.
+
+```{r}
+cTPClass <- table(titanic$Pclass, titanic$Survived)
+cTPClassSRel<- cTPClass/sum(cTPClass)
+ addmargins(cTPClassSRel )
+
+mosaicplot(cTPClass)
+
+chiSq <- chisq.test(cTPClass)
+chiSq$expected
+assocstats(cTPClass)
+
+Phi(cTPClass)
+```
+ 
+Betrachtung der Überlebenschance von Geschlecht und Passagierklasse.  
+ 
+```{r}
+# für Geschlecht, Überlebt und Klasse
+SexSurvidedClass<-table(titanic$Sex, titanic$Survived, titanic$Pclass)
+mosaicplot(SexSurvidedClass)
+
+#für Age überlebt KLasse
+AgeSurvidedClass<-table(titanic$groupAge, titanic$Survived, titanic$Pclass)
+AgeSurvidedClass
+addmargins(AgeSurvidedClass)
+mosaicplot(AgeSurvidedClass)
+```
+ 
+
+
+
+
